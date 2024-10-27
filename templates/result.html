@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نتائج الفحص</title>
+    <!-- تضمين مكتبة jsPDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- تضمين jsPDF AutoTable لإضافة الجداول -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <!-- تضمين مكتبة SweetAlert -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- تضمين مكتبة FontAwesome للأيقونات -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        h1 {
+            background-color: #198754;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin: 0;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .header, .details {
+            font-size: 18px;
+            color: #198754;
+            text-align: center;
+            margin: 15px 0;
+        }
+        .details {
+            font-size: 14px;
+            color: #555;
+        }
+        table {
+            width: 90%;
+            border-collapse: collapse;
+            margin: 30px auto;
+            background-color: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+        th {
+            background-color: #198754;
+            color: white;
+            font-weight: bold;
+        }
+        td {
+            background-color: #f9f9f9;
+        }
+        /* تعديل الأزرار لتكون في الجهة العلوية اليمنى */
+        .top-buttons {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        button {
+            background-color: #198754;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        button i {
+            margin-right: 8px;
+        }
+        button:hover {
+            background-color: #198754;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        /* زر الرجوع إلى أعلى الصفحة */
+        #backToTop {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #198754;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            display: none;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        #backToTop i {
+            margin-right: 8px;
+        }
+        #backToTop:hover {
+            background-color: #1c7430;
+        }
+    </style>
+</head>
+<body>
+    <h1>نتائج الفحص</h1>
+    
+    <!-- أزرار في الجهة العلوية اليمنى -->
+    <div class="top-buttons">
+        <!-- زر لحفظ التقرير كملف PDF -->
+        <button onclick="confirmAndSavePDF()">
+            <i class="fas fa-file-pdf"></i> حفظ التقرير كملف PDF
+        </button>
+
+        <!-- زر للرجوع إلى الصفحة الرئيسية -->
+        <button onclick="window.location.href='{{ url_for('index') }}';">
+            <i class="fas fa-home"></i> الرجوع إلى الصفحة الرئيسية
+        </button>
+    </div>
+    
+    <!-- عرض اسم الموقع، التاريخ، والوقت -->
+    <div class="header">KeepSafe</div>
+    <div class="details" id="scanDetails"></div>
+    
+    <table border="1" id="resultsTable">
+        <thead>
+            <tr>
+                <th>اسم الثغرة</th>
+                <th>مستوى الخطورة</th>
+                <th>الوصف</th>
+                <th>الحل</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for alert in alerts %}
+            <tr>
+                <td>{{ alert.name }}</td>
+                <td>{{ alert.risk }}</td>
+                <td>{{ alert.description }}</td>
+                <td>{{ alert.solution }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- زر للرجوع إلى أعلى الصفحة -->
+    <button id="backToTop" onclick="scrollToTop()">
+        <i class="fas fa-arrow-up"></i> 
+    </button>
+
+    <script>
+        // وظيفة لعرض التاريخ والوقت الحاليين
+        function displayDateTime() {
+            const currentDate = new Date();
+            const dateString = currentDate.toLocaleDateString('en-US');
+            const timeString = currentDate.toLocaleTimeString('en-US');
+            const dayString = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+
+            const detailsElement = document.getElementById('scanDetails');
+            detailsElement.innerHTML = `Scan Date: ${dateString}<br>Scan Time: ${timeString}<br>Day: ${dayString}`;
+        }
+
+        // استدعاء الوظيفة عند تحميل الصفحة
+        window.onload = displayDateTime;
+
+        // دالة لعرض تأكيد قبل حفظ التقرير
+        function confirmAndSavePDF() {
+            Swal.fire({
+                title: '؟ PDFهل تريد حفظ التقرير كملف ',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'نعم',
+                cancelButtonText: 'إلغاء'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    saveReportAsPDF(); // استدعاء دالة الحفظ إذا وافق المستخدم
+                }
+            });
+        }
+
+        // دالة لحفظ التقرير كملف PDF
+        function saveReportAsPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const currentDate = new Date();
+            const dateString = currentDate.toLocaleDateString('en-US');
+            const timeString = currentDate.toLocaleTimeString('en-US');
+            const dayString = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+
+            doc.setFontSize(16);
+            doc.text('KeepSafe', 10, 10);
+            doc.setFontSize(12);
+            doc.text(`Scan Date: ${dateString}`, 10, 20);
+            doc.text(`Scan Time: ${timeString}`, 10, 30);
+            doc.text(`Day: ${dayString}`, 10, 40);
+
+            const headers = [['Vulnerability Name', 'Risk Level', 'Description', 'Solution']];
+            const rows = [];
+
+            document.querySelectorAll('#resultsTable tbody tr').forEach(row => {
+                const rowData = [];
+                row.querySelectorAll('td').forEach(cell => {
+                    rowData.push(cell.innerText);
+                });
+                rows.push(rowData);
+            });
+
+            doc.autoTable({
+                head: headers,
+                body: rows,
+                startY: 50,
+                styles: { font: "arabic", fontStyle: "normal" }
+            });
+
+            // حفظ ملف PDF
+            doc.save('zap_report.pdf');
+
+            // عرض تنبيه بعد الحفظ
+            Swal.fire({
+                icon: 'success',
+                title: '!تم حفظ التقرير بنجاح',
+                text: '. PDF تم حفظ تقرير الفحص كملف ',
+                showConfirmButton: true,
+                confirmButtonText: 'موافق'
+            });
+        }
+
+        // دالة للتمرير إلى أعلى الصفحة
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        // عرض زر الرجوع إلى أعلى الصفحة عند التمرير
+        window.onscroll = function() {
+            const backToTopButton = document.getElementById('backToTop');
+            if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
+                backToTopButton.style.display = "block";
+            } else {
+                backToTopButton.style.display = "none";
+            }
+        };
+    </script>
+</body>
+</html>

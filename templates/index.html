@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فحص الموقع باستخدام ZAP</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            text-align: center;
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.3s ease;
+            display: block;
+            margin: 50px auto;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #scanProgress {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        /* تخصيص أزرار SweetAlert */
+        .swal2-confirm {
+            background-color: #198754 !important;
+            border-radius: 5px;
+        }
+        .swal2-cancel {
+            background-color: #198754 !important;
+            border-radius: 5px;
+        }
+
+        /* تغيير لون شريط التقدم */
+        .swal2-progress-bar progress {
+            width: 100%;
+            height: 20px;
+            border-radius: 5px;
+        }
+
+        progress[value]::-webkit-progress-bar {
+            background-color: #eee;
+            border-radius: 5px;
+        }
+
+        progress[value]::-webkit-progress-value {
+            background-color: #198754;
+            border-radius: 5px;
+        }
+
+        progress[value]::-moz-progress-bar {
+            background-color: #198754;
+            border-radius: 5px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <h1>فحص الموقع باستخدام ZAP</h1>
+
+    <!-- زر يظهر SweetAlert لإدخال الرابط -->
+    <button id="startScanButton" class="btn btn-primary">ابدأ الفحص</button>
+
+    <div id="scanProgress" class="mt-3"></div>
+
+    <script>
+        // دالة لإظهار SweetAlert لإدخال الرابط
+        document.getElementById('startScanButton').addEventListener('click', function() {
+            Swal.fire({
+                title: 'أدخل رابط الموقع',
+                input: 'text',
+                inputPlaceholder: 'أدخل رابط الموقع هنا',
+                showCancelButton: true,
+                confirmButtonText: 'ابدأ الفحص',
+                cancelButtonText: 'إلغاء',
+                customClass: {
+                    confirmButton: 'swal2-confirm',
+                    cancelButton: 'swal2-cancel'
+                },
+                inputValidator: (value) => {
+                    if (!value) {
+                        return 'يجب إدخال رابط الموقع!';
+                    }
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    const targetUrl = result.value;
+                    startScan(targetUrl);  // استدعاء الدالة لبدء الفحص
+                }
+            });
+        });
+
+        // دالة لبدء الفحص
+        function startScan(target_url) {
+            fetch('/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ target_url: target_url })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.scan_id) {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'تم بدء الفحص بنجاح! يرجى الانتظار حتى انتهاء العملية.',
+                        showConfirmButton: false,
+                        allowOutsideClick: false,
+                        customClass: {
+                            confirmButton: 'swal2-confirm',
+                            cancelButton: 'swal2-cancel'
+                        }
+                    });
+                    checkScanProgress(data.scan_id);  // متابعة الفحص
+                } else if (data.error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'خطأ',
+                        text: data.error,
+                        customClass: {
+                            confirmButton: 'swal2-confirm',
+                            cancelButton: 'swal2-cancel'
+                        }
+                    });
+                }
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'خطأ',
+                    text: 'حدث خطأ أثناء محاولة بدء الفحص. حاول مرة أخرى.',
+                    customClass: {
+                        confirmButton: 'swal2-confirm',
+                        cancelButton: 'swal2-cancel'
+                    }
+                });
+                console.log('Error:', error);
+            });
+        }
+
+        // دالة لمتابعة تقدم الفحص
+        function checkScanProgress(scanId) {
+            const interval = setInterval(function() {
+                fetch(`/scan_status?scan_id=${scanId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status < 100) {
+                            Swal.fire({
+                                title: '...الفحص قيد التقدم',
+                                html: `<strong> ${data.status}%</strong><br><progress value="${data.status}" max="100"></progress>`,
+                                showConfirmButton: false,
+                                allowOutsideClick: false,
+                                customClass: {
+                                    confirmButton: 'swal2-confirm',
+                                    cancelButton: 'swal2-cancel'
+                                }
+                            });
+                        } else if (data.status >= 100) {
+                            clearInterval(interval);
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'تم اكتمال الفحص!',
+                                showConfirmButton: true,
+                                customClass: {
+                                    confirmButton: 'swal2-confirm',
+                                    cancelButton: 'swal2-cancel'
+                                }
+                            }).then(() => {
+                                window.location.href = `/results?scan_id=${scanId}`;  // عرض النتائج
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'خطأ',
+                            text: 'حدث خطأ أثناء جلب حالة الفحص. حاول مرة أخرى.',
+                            customClass: {
+                                confirmButton: 'swal2-confirm',
+                                cancelButton: 'swal2-cancel'
+                            }
+                        });
+                        console.log('Error:', error);
+                    });
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
